@@ -8,6 +8,12 @@ use App\Models\UserModel;
 class PaymentController extends BaseApiController
 {
     protected $format = 'json';
+    protected $paymentModel;
+
+    public function __construct()
+    {
+        $this->paymentModel = new \App\Models\PaymentModel();
+    }
 
     /**
      * Initialize wallet top-up payment
@@ -16,7 +22,8 @@ class PaymentController extends BaseApiController
     {
         $rules = [
             'user_id' => 'required|integer|is_natural_no_zero',
-            'amount' => 'required|numeric|greater_than[99]',
+            'amount' => 'required|numeric|greater_than[499]', // Minimum 500 UGX
+            'phone' => 'required|min_length[10]|max_length[15]',
         ];
 
         $validationResult = $this->validateRequest($rules);
@@ -24,11 +31,21 @@ class PaymentController extends BaseApiController
             return $validationResult;
         }
 
-        $userId = $this->request->getPost('user_id');
-        $amount = $this->request->getPost('amount');
+        // Try to get data from JSON first, then fallback to POST
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'PaymentController::initializeTopUp - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
+        
+        $userId = $jsonData['user_id'] ?? $this->request->getPost('user_id');
+        $amount = floatval($jsonData['amount'] ?? $this->request->getPost('amount')); // Convert to float
+        $phone = $jsonData['phone'] ?? $this->request->getPost('phone');
 
         try {
-            // Get user details for phone number
+            // Get user details to verify user exists
             $userModel = new UserModel();
             $user = $userModel->find($userId);
             if (!$user) {
@@ -36,7 +53,7 @@ class PaymentController extends BaseApiController
             }
 
             // Format phone number for GMPay (add 256 prefix if not present)
-            $phoneNumber = $user['phone'];
+            $phoneNumber = $phone;
             if (!str_starts_with($phoneNumber, '256')) {
                 // Remove leading 0 if present and add 256
                 $phoneNumber = '256' . ltrim($phoneNumber, '0');
@@ -54,10 +71,10 @@ class PaymentController extends BaseApiController
             );
 
             if ($paymentId) {
-                // Prepare GMPay payload
+                // Prepare GMPay payload - ensure amount is sent as clean integer string
                 $gmpayPayload = [
                     'msisdn' => $phoneNumber,
-                    'amount' => $amount,
+                    'amount' => (string)intval($amount), // Convert to clean integer string
                     'transactionId' => $transactionId
                 ];
 
@@ -70,7 +87,13 @@ class PaymentController extends BaseApiController
                     'gmpay_url' => 'https://debit.gmpayapp.site/public/deposit/custom'
                 ], 'Top-up payment initialized successfully', 201);
             } else {
-                return $this->errorResponse('Failed to initialize top-up payment', 500);
+                // Get validation errors if any
+                $errors = $this->paymentModel->errors();
+                $errorMessage = 'Failed to initialize top-up payment';
+                if (!empty($errors)) {
+                    $errorMessage .= ': ' . implode(', ', $errors);
+                }
+                return $this->errorResponse($errorMessage, 500);
             }
         } catch (\Exception $e) {
             return $this->errorResponse('Top-up payment initialization failed: ' . $e->getMessage(), 500);
@@ -118,6 +141,26 @@ class PaymentController extends BaseApiController
                     $this->paymentModel->approveTransaction($payment['id']);
                 }
             }
+            
+            // If payment is already marked as SUCCESS but not approved, approve it
+            log_message('info', 'PaymentController::verify - Payment status: ' . $payment['status']);
+            if (($payment['status'] === 'SUCCESS' || $payment['status'] === 'success') && $payment['status'] !== 'approved') {
+                log_message('info', 'PaymentController::verify - Attempting to approve transaction: ' . $payment['id']);
+                $approvalResult = $this->paymentModel->approveTransaction($payment['id']);
+                log_message('info', 'PaymentController::verify - Approval result: ' . json_encode($approvalResult));
+                if ($approvalResult['success']) {
+                    // Refresh payment data after approval
+                    $payment = $this->paymentModel->getByTransactionId($transactionId);
+                }
+            } else if ($payment['status'] === 'approved') {
+                log_message('info', 'PaymentController::verify - Transaction already approved. Checking if tokens were credited...');
+                // Check if tokens were actually credited
+                $userModel = new UserModel();
+                $user = $userModel->find($payment['user_id']);
+                log_message('info', 'PaymentController::verify - User tokens: ' . ($user['tokens'] ?? 0));
+            } else {
+                log_message('info', 'PaymentController::verify - Transaction not eligible for approval. Status: ' . $payment['status']);
+            }
 
             return $this->successResponse([
                 'transaction_id' => $payment['transaction_id'],
@@ -126,6 +169,7 @@ class PaymentController extends BaseApiController
                 'tokens' => $payment['tokens'],
                 'payment_type' => $payment['payment_type'],
                 'created_at' => $payment['created_at'],
+                'note' => $payment['note'] ?? '',
                 'gmpay_status' => $gmpayStatus
             ]);
         } catch (\Exception $e) {
@@ -181,8 +225,17 @@ class PaymentController extends BaseApiController
             return $validationResult;
         }
 
-        $transactionId = $this->request->getPost('transaction_id');
-        $status = $this->request->getPost('status');
+        // Try to get data from JSON first, then fallback to POST
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'PaymentController::updateStatus - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
+        
+        $transactionId = $jsonData['transaction_id'] ?? $this->request->getPost('transaction_id');
+        $status = $jsonData['status'] ?? $this->request->getPost('status');
 
         try {
             $payment = $this->paymentModel->getByTransactionId($transactionId);
@@ -287,14 +340,14 @@ class PaymentController extends BaseApiController
      */
     public function getPaymentHistory()
     {
-        try {
-            // Get current user from session or token
-            $userId = $this->getCurrentUserId();
-            
-            if (!$userId) {
-                return $this->errorResponse('User not authenticated', 401);
-            }
+        // Require authentication
+        $auth = $this->requireAuth();
+        if ($auth) {
+            return $auth;
+        }
 
+        try {
+            $userId = $this->currentUser['id'];
             $payments = $this->paymentModel->getUserPayments($userId);
 
             if ($payments) {

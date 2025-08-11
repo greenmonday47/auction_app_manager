@@ -42,6 +42,13 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function($routes) 
     $routes->get('payment/getPaymentHistory', 'PaymentController::getPaymentHistory');
     $routes->get('payment/getWalletStats', 'PaymentController::getWalletStats');
     
+    // Cron routes (for payment status checking)
+    $routes->get('cron/check-payments', 'CronController::checkPendingPayments');
+    $routes->get('cron/health', 'CronController::healthCheck');
+    
+    // Test routes
+    $routes->get('test/database', 'TestController::testDatabase');
+    
     // User routes
     $routes->get('user', 'UserController::getProfile');
     $routes->post('user/update', 'UserController::updateProfile');

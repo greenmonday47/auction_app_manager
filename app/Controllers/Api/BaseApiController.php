@@ -119,6 +119,12 @@ class BaseApiController extends ResourceController
         if (isset($auction['is_live'])) {
             $formatted['is_live'] = (bool) $auction['is_live'];
         }
+        if (isset($auction['winner_name'])) {
+            $formatted['winner_name'] = $auction['winner_name'];
+        }
+        if (isset($auction['winner_phone'])) {
+            $formatted['winner_phone'] = $auction['winner_phone'];
+        }
         if (isset($auction['bids'])) {
             $formatted['bids'] = array_map([$this, 'formatBidData'], $auction['bids']);
         }
@@ -243,8 +249,14 @@ class BaseApiController extends ResourceController
 
     protected function validateRequest($rules)
     {
-        // Get JSON data and validate manually
-        $jsonData = $this->request->getJSON(true);
+        // Try to get JSON data first
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, continue with form data
+        }
+        
         if ($jsonData) {
             // Manual validation for JSON data
             $validation = \Config\Services::validation();
@@ -255,9 +267,22 @@ class BaseApiController extends ResourceController
                 return $this->errorResponse('Validation failed', 400, $errors);
             }
         } else {
-            // Fallback to normal validation for POST data
-            if (!$this->validate($rules)) {
-                $errors = $this->validator->getErrors();
+            // Fallback to manual validation for POST data
+            $validation = \Config\Services::validation();
+            $validation->setRules($rules);
+            
+            // Get POST data
+            $postData = [];
+            foreach ($rules as $field => $rule) {
+                $postData[$field] = $this->request->getPost($field);
+            }
+            
+            // Debug: Log what we received
+            log_message('info', 'POST data received: ' . json_encode($this->request->getPost()));
+            log_message('info', 'POST data for validation: ' . json_encode($postData));
+            
+            if (!$validation->run($postData)) {
+                $errors = $validation->getErrors();
                 return $this->errorResponse('Validation failed', 400, $errors);
             }
         }

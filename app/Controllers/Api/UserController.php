@@ -37,7 +37,16 @@ class UserController extends BaseApiController
             return $validation;
         }
 
-        $name = $this->request->getPost('name');
+        // Try to get data from JSON first, then fallback to POST
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'UserController::updateProfile - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
+        
+        $name = $jsonData['name'] ?? $this->request->getPost('name');
         $userId = $this->currentUser['id'];
 
         $updated = $this->userModel->update($userId, ['name' => $name]);

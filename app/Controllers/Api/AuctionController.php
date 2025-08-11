@@ -62,6 +62,15 @@ class AuctionController extends BaseApiController
             $auction['final_bid'] = $highestBid ? $highestBid['amount'] : $auction['starting_price'];
             $auction['final_bid_formatted'] = $this->formatCurrency($auction['final_bid']);
             $auction['total_bids'] = $this->bidModel->where('auction_id', $auction['id'])->countAllResults();
+            
+            // Get winner information if there's a winner_id
+            if (!empty($auction['winner_id'])) {
+                $winner = $this->userModel->find($auction['winner_id']);
+                if ($winner) {
+                    $auction['winner_name'] = $winner['name'];
+                    $auction['winner_phone'] = $winner['phone'];
+                }
+            }
         }
 
         // Format each auction with proper data types
@@ -123,8 +132,18 @@ class AuctionController extends BaseApiController
             return $validation;
         }
 
-        $amount = (float)$this->request->getPost('amount');
-        $userId = $this->currentUser['id'];
+        // Try to get data from JSON first, then fallback to POST
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'AuctionController::placeBid - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
+        
+        $amount = (float)($jsonData['amount'] ?? $this->request->getPost('amount'));
+        $userId = (int)$this->currentUser['id'];
+        $auctionId = (int)$auctionId;
 
         $result = $this->bidModel->placeBid($auctionId, $userId, $amount);
         

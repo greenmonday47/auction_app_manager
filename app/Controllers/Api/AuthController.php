@@ -20,7 +20,13 @@ class AuthController extends BaseApiController
         }
 
         // Try to get data from JSON first, then fallback to POST
-        $jsonData = $this->request->getJSON(true);
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'AuthController::register - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
         $userData = [
             'phone' => $jsonData['phone'] ?? $this->request->getPost('phone'),
             'pin' => $jsonData['pin'] ?? $this->request->getPost('pin'),
@@ -64,7 +70,13 @@ class AuthController extends BaseApiController
         }
 
         // Try to get data from JSON first, then fallback to POST
-        $jsonData = $this->request->getJSON(true);
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'AuthController::login - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
         $phone = $jsonData['phone'] ?? $this->request->getPost('phone');
         $pin = $jsonData['pin'] ?? $this->request->getPost('pin');
 

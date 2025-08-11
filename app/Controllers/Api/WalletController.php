@@ -45,8 +45,17 @@ class WalletController extends BaseApiController
             return $validation;
         }
 
-        $amount = (float)$this->request->getPost('amount');
-        $note = $this->request->getPost('note') ?? '';
+        // Try to get data from JSON first, then fallback to POST
+        $jsonData = null;
+        try {
+            $jsonData = $this->request->getJSON(true);
+        } catch (\Exception $e) {
+            // JSON parsing failed, will use POST data
+            log_message('info', 'WalletController::topUp - JSON parsing failed, using POST data: ' . $e->getMessage());
+        }
+        
+        $amount = (float)($jsonData['amount'] ?? $this->request->getPost('amount'));
+        $note = $jsonData['note'] ?? $this->request->getPost('note') ?? '';
         $userId = $this->currentUser['id'];
 
         $transactionId = $this->transactionModel->createTopUp($userId, $amount, $note);

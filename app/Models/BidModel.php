@@ -132,10 +132,20 @@ class BidModel extends Model
                 'user_id' => $userId,
                 'amount' => $amount,
                 'tokens_used' => 1,
-                'created_at' => date('Y-m-d H:i:s')
             ];
 
-            $this->insert($bidData);
+            // Debug: Log the bid data
+            log_message('info', 'BidModel::placeBid - Bid data: ' . json_encode($bidData));
+            log_message('info', 'BidModel::placeBid - Data types: auction_id=' . gettype($auctionId) . ', user_id=' . gettype($userId) . ', amount=' . gettype($amount));
+
+            // Use query builder directly to avoid timestamp issues
+            $this->db->table('bids')->insert([
+                'auction_id' => $auctionId,
+                'user_id' => $userId,
+                'amount' => $amount,
+                'tokens_used' => 1,
+                'created_at' => date('Y-m-d H:i:s')
+            ]);
 
             // Deduct token from user
             $userModel = new UserModel();
