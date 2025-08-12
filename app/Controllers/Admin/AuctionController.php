@@ -135,10 +135,10 @@ class AuctionController extends BaseAdminController
         $description = $this->request->getPost('description');
         $startingPrice = $this->request->getPost('starting_price');
         $startTime = $this->request->getPost('start_time');
-        $duration = $this->request->getPost('duration');
+        $endTime = $this->request->getPost('end_time');
         $imageUrl = $this->request->getPost('image_url');
 
-        if (!$title || !$description || !$startingPrice || !$startTime || !$duration) {
+        if (!$title || !$description || !$startingPrice || !$startTime || !$endTime) {
             $this->errorMessage('All fields are required');
             return redirect()->back();
         }
@@ -149,10 +149,14 @@ class AuctionController extends BaseAdminController
             return redirect()->back();
         }
 
-        // Calculate end time
+        // Validate that end time is after start time
         $startDateTime = new \DateTime($startTime);
-        $endDateTime = clone $startDateTime;
-        $endDateTime->add(new \DateInterval("PT{$duration}M"));
+        $endDateTime = new \DateTime($endTime);
+        
+        if ($endDateTime <= $startDateTime) {
+            $this->errorMessage('End time must be after start time');
+            return redirect()->back();
+        }
 
         $auctionData = [
             'item_name' => $title,

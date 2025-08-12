@@ -131,7 +131,7 @@
                             <th>Starting Price</th>
                             <th>Current Bid</th>
                             <th>Status</th>
-                            <th>Duration</th>
+                            <th>Time Remaining</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -306,8 +306,8 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="duration" class="form-label">Duration (minutes)</label>
-                                <input type="number" class="form-control" id="duration" name="duration" min="5" max="1440" value="60" required>
+                                <label for="end_time" class="form-label">End Time</label>
+                                <input type="datetime-local" class="form-control" id="end_time" name="end_time" required>
                             </div>
                         </div>
                     </div>
@@ -407,13 +407,35 @@ function deleteAuction(auctionId, title) {
     }
 }
 
-// Set default start time to current time + 5 minutes
+// Set default start time to current time + 5 minutes and end time to current time + 1 hour
 document.addEventListener('DOMContentLoaded', function() {
     const now = new Date();
-    now.setMinutes(now.getMinutes() + 5);
-    const startTime = now.toISOString().slice(0, 16);
-    document.getElementById('start_time').value = startTime;
+    const startTime = new Date(now.getTime() + 5 * 60000); // 5 minutes from now
+    const endTime = new Date(now.getTime() + 60 * 60000); // 1 hour from now
+    
+    document.getElementById('start_time').value = startTime.toISOString().slice(0, 16);
+    document.getElementById('end_time').value = endTime.toISOString().slice(0, 16);
+    
+    // Add validation to ensure end time is after start time
+    document.getElementById('start_time').addEventListener('change', validateTimes);
+    document.getElementById('end_time').addEventListener('change', validateTimes);
 });
+
+function validateTimes() {
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+    
+    if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        
+        if (end <= start) {
+            document.getElementById('end_time').setCustomValidity('End time must be after start time');
+        } else {
+            document.getElementById('end_time').setCustomValidity('');
+        }
+    }
+}
 </script>
 
 <?= $this->endSection() ?> 
