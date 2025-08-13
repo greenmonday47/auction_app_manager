@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/posiiaci/auc.posium.site
+    - /bin/cp -r * $DEPLOYPATH
