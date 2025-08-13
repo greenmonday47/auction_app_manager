@@ -27,9 +27,9 @@ class Database extends Config
     public array $default = [
         'DSN'          => '',
         'hostname'     => 'localhost',
-        'username'     => 'root',
-        'password'     => '',
-        'database'     => 'auctioneer',
+        'username'     => 'posiiaci_admin',
+        'password'     => 'WKN7BDUrFm&y',
+        'database'     => 'posiiaci_auc',
         // 'username'     => 'root',
         // 'password'     => '',
         // 'database'     => 'auctioneer',
